@@ -19,8 +19,10 @@ public class ItemController {
             @RequestParam(name = "sort_by", defaultValue = "expires_on") String sortBy,
             @RequestParam(name = "sort_order", defaultValue = "asc") String sortOrder,
             @RequestParam(required = false) ItemStatus status,
-            @RequestParam(required = false) String category) {
-        Page<Item> result = service.list(page, pageSize, sortBy, sortOrder, status, category);
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String location,
+            @RequestParam(required = false, name = "q") String keyword) {
+        Page<Item> result = service.list(page, pageSize, sortBy, sortOrder, status, category, location, keyword);
         return Map.of("items", result.getContent().stream().map(ItemResponse::from).toList(),
                 "page", result.getNumber() + 1, "pageSize", result.getSize(), "total", result.getTotalElements());
     }

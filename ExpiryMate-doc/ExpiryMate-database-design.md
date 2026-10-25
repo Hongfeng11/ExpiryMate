@@ -1,7 +1,7 @@
 # ExpiryMate 数据库设计说明
 
 > 数据库：MySQL 8.0.16+（InnoDB，utf8mb4）  
-> 版本：1.1  
+> 版本：1.2  
 > 适用范围：ExpiryMate 前后端分离 Web 第一阶段
 
 ## 文件用途与初始化
@@ -36,8 +36,8 @@ erDiagram
 | 表 | 用途 | 关键规则 |
 |---|---|---|
 | `users` | 账号、密码哈希和用户时区 | `email_lower` 生成列实现忽略大小写唯一；密码只存哈希 |
-| `items` | 物品及日期信息 | `expires_on` 是状态计算权威日期；数量大于 0；支持软删除 |
-| `reminder_preferences` | 提醒开关、提前天数、时间和渠道 | JSON 数组由后端校验；站内提醒为基础渠道 |
+| `items` | 物品及日期信息 | `expires_on` 是最终有效到期日；包装日期、未开封保质期和开封后期限分别保存；支持软删除 |
+| `reminder_preferences` | 提醒开关、提前天数、时间和渠道 | 已提供偏好设置 API；JSON 数组由后端校验；站内提醒为基础渠道 |
 | `notifications` | 站内通知与推送任务记录 | 用户、幂等键和渠道唯一，避免重复通知 |
 | `push_subscriptions` | Web Push 浏览器订阅 | 端点和密钥以应用层密文保存；加密密钥由数据库外部管理 |
 
@@ -45,12 +45,14 @@ erDiagram
 
 数据库字段使用 `snake_case`；REST JSON 使用 `camelCase`。后端 DTO 负责映射，例如 `expires_on` ↔ `expiresOn`、`purchased_on` ↔ `purchasedOn`。
 
-保质期单位使用 `days`、`months`、`years`。前端显示“天、月、年”，提交 API 时发送英文代码。物品状态值：
+保质期单位使用 `days`、`months`、`years`。前端显示“天、月、年”，提交 API 时发送英文代码。包装标注到期日保存在 `package_expires_on`；未开封期限和开封后期限分别保存在 `shelf_life_*` 和 `opened_shelf_life_*` 字段。`expires_on` 保存最终有效到期日：包装/未开封期限与开封日期加开封后期限同时存在时，取较早者。月份末无对应日时按目标月份最后一天计算。物品状态值：
 
 - `active`：仍在管理中。
 - `used_up`：已用完。
 - `discarded`：已丢弃。
 - `processed`：已处理（前端演示状态 `done` 由 API 适配层映射）。
+
+使用中的物品库存必须大于 0；标记为 `used_up` 或 `discarded` 时库存归零。状态变更后，已关闭的物品不再进入活动物品统计和临期提醒。
 
 物品日期使用 MySQL `DATE`。`TIMESTAMP` 会按数据库会话时区转换，`DATETIME` 不携带时区；建议后端连接会话统一设置为 UTC，提醒时间按用户保存的 IANA 时区解释，并以用户本地自然日计算。
 

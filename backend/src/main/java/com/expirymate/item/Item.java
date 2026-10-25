@@ -32,8 +32,14 @@ public class Item {
     private ShelfLifeUnit shelfLifeUnit;
     @Column(name = "expires_on", nullable = false)
     private LocalDate expiresOn;
+    @Column(name = "package_expires_on")
+    private LocalDate packageExpiresOn;
     @Column(name = "opened_on")
     private LocalDate openedOn;
+    @Column(name = "opened_shelf_life_value")
+    private Integer openedShelfLifeValue;
+    @Enumerated(EnumType.STRING) @Column(name = "opened_shelf_life_unit", length = 10)
+    private ShelfLifeUnit openedShelfLifeUnit;
     @Column(columnDefinition = "text")
     private String notes;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20)
@@ -47,11 +53,12 @@ public class Item {
 
     protected Item() {}
 
-    public static Item create(String id, String userId, ItemRequest request) {
+    public static Item create(String id, String userId, ItemRequest request, LocalDate expiresOn) {
         Item item = new Item();
         item.id = id;
         item.userId = userId;
         item.apply(request, false);
+        item.expiresOn = expiresOn;
         return item;
     }
 
@@ -63,15 +70,28 @@ public class Item {
         if (!patch || request.unit() != null) this.unit = request.unit() == null ? "件" : request.unit();
         if (!patch || request.manufacturedOn() != null) this.manufacturedOn = request.manufacturedOn();
         if (!patch || request.purchasedOn() != null) this.purchasedOn = request.purchasedOn();
-        if (!patch || request.shelfLifeValue() != null) this.shelfLifeValue = request.shelfLifeValue();
-        if (!patch || request.shelfLifeUnit() != null) this.shelfLifeUnit = request.shelfLifeUnit();
+        if (patch && request.clearShelfLife() == Boolean.TRUE) { this.shelfLifeValue = null; this.shelfLifeUnit = null; }
+        else {
+            if (!patch || request.shelfLifeValue() != null) this.shelfLifeValue = request.shelfLifeValue();
+            if (!patch || request.shelfLifeUnit() != null) this.shelfLifeUnit = request.shelfLifeUnit();
+        }
         if (!patch || request.expiresOn() != null) this.expiresOn = request.expiresOn();
-        if (!patch || request.openedOn() != null) this.openedOn = request.openedOn();
+        if (!patch || request.packageExpiresOn() != null) this.packageExpiresOn = request.packageExpiresOn();
+        if (patch && request.clearPackageExpiresOn() == Boolean.TRUE) this.packageExpiresOn = null;
+        if (!patch || request.clearOpenedOn() == Boolean.TRUE) this.openedOn = patch ? null : request.openedOn();
+        else if (request.openedOn() != null) this.openedOn = request.openedOn();
+        if (patch && request.clearOpenedShelfLife() == Boolean.TRUE) { this.openedShelfLifeValue = null; this.openedShelfLifeUnit = null; }
+        else {
+            if (!patch || request.openedShelfLifeValue() != null) this.openedShelfLifeValue = request.openedShelfLifeValue();
+            if (!patch || request.openedShelfLifeUnit() != null) this.openedShelfLifeUnit = request.openedShelfLifeUnit();
+        }
         if (!patch || request.notes() != null) this.notes = request.notes();
         if (request.status() != null) this.status = request.status();
     }
 
     public void softDelete() { this.deletedAt = Instant.now(); }
+    public void setExpiresOn(LocalDate expiresOn) { this.expiresOn = expiresOn; }
+    public void setQuantity(BigDecimal quantity) { this.quantity = quantity; }
     public String getId() { return id; }
     public String getUserId() { return userId; }
     public String getName() { return name; }
@@ -84,7 +104,10 @@ public class Item {
     public Integer getShelfLifeValue() { return shelfLifeValue; }
     public ShelfLifeUnit getShelfLifeUnit() { return shelfLifeUnit; }
     public LocalDate getExpiresOn() { return expiresOn; }
+    public LocalDate getPackageExpiresOn() { return packageExpiresOn; }
     public LocalDate getOpenedOn() { return openedOn; }
+    public Integer getOpenedShelfLifeValue() { return openedShelfLifeValue; }
+    public ShelfLifeUnit getOpenedShelfLifeUnit() { return openedShelfLifeUnit; }
     public String getNotes() { return notes; }
     public ItemStatus getStatus() { return status; }
     public Instant getCreatedAt() { return createdAt; }

@@ -31,7 +31,10 @@ CREATE TABLE IF NOT EXISTS items (
     shelf_life_value INT,
     shelf_life_unit VARCHAR(10),
     expires_on DATE NOT NULL,
+    package_expires_on DATE,
     opened_on DATE,
+    opened_shelf_life_value INT,
+    opened_shelf_life_unit VARCHAR(10),
     notes TEXT,
     status VARCHAR(20) NOT NULL DEFAULT 'active',
     created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
@@ -39,19 +42,24 @@ CREATE TABLE IF NOT EXISTS items (
     deleted_at TIMESTAMP(6) NULL,
     CONSTRAINT fk_items_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT ck_items_name_not_blank CHECK (CHAR_LENGTH(TRIM(name)) > 0),
-    CONSTRAINT ck_items_quantity_positive CHECK (quantity > 0),
+    CONSTRAINT ck_items_quantity_nonnegative CHECK (quantity >= 0 AND (quantity > 0 OR status <> 'active')),
     CONSTRAINT ck_items_shelf_life_positive CHECK (shelf_life_value IS NULL OR shelf_life_value > 0),
     CONSTRAINT ck_items_shelf_life_unit CHECK (shelf_life_unit IS NULL OR shelf_life_unit IN ('days','months','years')),
     CONSTRAINT ck_items_shelf_life_pair CHECK ((shelf_life_value IS NULL AND shelf_life_unit IS NULL) OR (shelf_life_value IS NOT NULL AND shelf_life_unit IS NOT NULL)),
+    CONSTRAINT ck_items_opened_shelf_life_positive CHECK (opened_shelf_life_value IS NULL OR opened_shelf_life_value > 0),
+    CONSTRAINT ck_items_opened_shelf_life_unit CHECK (opened_shelf_life_unit IS NULL OR opened_shelf_life_unit IN ('days','months','years')),
+    CONSTRAINT ck_items_opened_shelf_life_pair CHECK ((opened_shelf_life_value IS NULL AND opened_shelf_life_unit IS NULL) OR (opened_shelf_life_value IS NOT NULL AND opened_shelf_life_unit IS NOT NULL)),
     CONSTRAINT ck_items_purchase_after_manufacture CHECK (manufactured_on IS NULL OR purchased_on IS NULL OR purchased_on >= manufactured_on),
     CONSTRAINT ck_items_expiry_after_manufacture CHECK (manufactured_on IS NULL OR expires_on >= manufactured_on),
     CONSTRAINT ck_items_opened_after_purchase CHECK (opened_on IS NULL OR purchased_on IS NULL OR opened_on >= purchased_on),
+    CONSTRAINT ck_items_opened_after_manufacture CHECK (opened_on IS NULL OR manufactured_on IS NULL OR opened_on >= manufactured_on),
     CONSTRAINT ck_items_status CHECK (status IN ('active','used_up','discarded','processed')),
     INDEX ix_items_user_expiry (user_id, status, deleted_at, expires_on, id),
     INDEX ix_items_user_category (user_id, status, deleted_at, category, expires_on),
     INDEX ix_items_user_location (user_id, status, deleted_at, location),
     INDEX ix_items_user_name (user_id, name)
 ) ENGINE=InnoDB;
+-- expires_on stores the effective date: the earlier of the unopened/package expiry and opened expiry.
 
 CREATE TABLE IF NOT EXISTS reminder_preferences (
     user_id CHAR(36) NOT NULL PRIMARY KEY,
