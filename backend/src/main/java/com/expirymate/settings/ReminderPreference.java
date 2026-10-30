@@ -13,7 +13,7 @@ import org.hibernate.type.SqlTypes;
 @Table(name = "reminder_preferences")
 public class ReminderPreference {
     @Id
-    @Column(name = "user_id", length = 36)
+    @Column(name = "user_id", length = 36, columnDefinition = "char(36)")
     private String userId;
 
     @Column(nullable = false)

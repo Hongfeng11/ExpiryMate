@@ -16,5 +16,6 @@ dist/
 npm-debug.log*
 
 # 后端
+.m2-cache/
 target/
 *.log

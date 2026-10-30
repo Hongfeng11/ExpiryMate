@@ -10,7 +10,7 @@ import java.time.Instant;
 @Table(name = "users")
 public class User {
     @Id
-    @Column(length = 36)
+    @Column(length = 36, columnDefinition = "char(36)")
     private String id;
     @Column(nullable = false, length = 254)
     private String email;

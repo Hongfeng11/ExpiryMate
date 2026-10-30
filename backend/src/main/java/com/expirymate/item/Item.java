@@ -8,9 +8,9 @@ import java.time.LocalDate;
 @Entity
 @Table(name = "items")
 public class Item {
-    @Id @Column(length = 36)
+    @Id @Column(length = 36, columnDefinition = "char(36)")
     private String id;
-    @Column(name = "user_id", nullable = false, length = 36)
+    @Column(name = "user_id", nullable = false, length = 36, columnDefinition = "char(36)")
     private String userId;
     @Column(nullable = false, length = 120)
     private String name;
