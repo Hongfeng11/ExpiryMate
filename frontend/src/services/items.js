@@ -1,5 +1,12 @@
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+import { API_BASE, apiRequest } from './api'
 const STORAGE_KEY = 'expirymate.items.v1'
+let activeListId = ''
+export const isApiMode = Boolean(API_BASE)
+export function setActiveListId(id) { activeListId = id || '' }
+function listPath() {
+  if (!activeListId) throw new Error('请先选择一个物品清单')
+  return `/api/v1/lists/${encodeURIComponent(activeListId)}/items`
+}
 
 function dateOffset(days) {
   const d = new Date()
@@ -25,21 +32,6 @@ function localItems() {
   return initial
 }
 function save(items) { localStorage.setItem(STORAGE_KEY, JSON.stringify(items)) }
-async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    credentials: 'include',
-  })
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || `请求失败 (${response.status})`)
-  }
-  if (response.status === 204) return null
-  return response.json()
-}
-
-export const isApiMode = Boolean(API_BASE)
 function toApiItem(item) {
   const units = { 天: 'days', 月: 'months', 年: 'years' }
   const hasShelfLife = item.shelfLifeValue !== '' && item.shelfLifeValue != null
@@ -64,7 +56,7 @@ export async function listItems(filters = {}) {
     if (filters.category && filters.category !== '全部分类') query.set('category', filters.category)
     if (filters.location && filters.location !== '全部位置') query.set('location', filters.location)
     if (filters.q?.trim()) query.set('q', filters.q.trim())
-    const data = await request(`/api/v1/items?${query.toString()}`)
+    const data = await apiRequest(`${listPath()}?${query.toString()}`)
     return data.items || data.data?.items || data.data || []
   }
   const items = localItems()
@@ -76,7 +68,7 @@ export async function listItems(filters = {}) {
   )
 }
 export async function createItem(item) {
-  if (isApiMode) return request('/api/v1/items', { method: 'POST', body: JSON.stringify(toApiItem(item)) })
+  if (isApiMode) return apiRequest(listPath(), { method: 'POST', body: JSON.stringify(toApiItem(item)) })
   const items = localItems()
   const created = { ...item, id: crypto.randomUUID(), status: 'active' }
   items.unshift(created)
@@ -84,11 +76,11 @@ export async function createItem(item) {
   return created
 }
 export async function removeItem(id) {
-  if (isApiMode) return request(`/api/v1/items/${id}`, { method: 'DELETE' })
+  if (isApiMode) return apiRequest(`${listPath()}/${encodeURIComponent(id)}`, { method: 'DELETE' })
   save(localItems().filter(item => item.id !== id))
 }
 export async function updateItem(id, changes) {
-  if (isApiMode) return request(`/api/v1/items/${id}`, { method: 'PATCH', body: JSON.stringify(toApiItem(changes)) })
+  if (isApiMode) return apiRequest(`${listPath()}/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(toApiItem(changes)) })
   const items = localItems().map(item => item.id === id ? { ...item, ...changes } : item)
   save(items)
 }

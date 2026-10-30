@@ -2,7 +2,6 @@ package com.expirymate.item;
 
 import java.time.LocalDate;
 import java.util.UUID;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -10,20 +9,22 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import com.expirymate.shared.ListAccessService;
 
 @Service
 public class ItemService {
     private final ItemRepository items;
-    private final String demoUserId;
+    private final ListAccessService listAccess;
 
-    public ItemService(ItemRepository items, @Value("${app.demo-user-id}") String demoUserId) {
+    public ItemService(ItemRepository items, ListAccessService listAccess) {
         this.items = items;
-        this.demoUserId = demoUserId;
+        this.listAccess = listAccess;
     }
 
     @Transactional(readOnly = true)
-    public Page<Item> list(int page, int pageSize, String sortBy, String sortOrder, ItemStatus status,
+    public Page<Item> list(String listId, String userId, int page, int pageSize, String sortBy, String sortOrder, ItemStatus status,
                            String category, String location, String keyword) {
+        listAccess.requireMember(listId, userId);
         String property = switch (sortBy == null ? "expires_on" : sortBy) {
             case "name" -> "name";
             case "created_at" -> "createdAt";
@@ -32,14 +33,15 @@ public class ItemService {
         };
         Sort.Direction direction = "desc".equalsIgnoreCase(sortOrder) ? Sort.Direction.DESC : Sort.Direction.ASC;
         var pageable = PageRequest.of(Math.max(0, page - 1), Math.min(Math.max(1, pageSize), 100), Sort.by(direction, property));
-        return items.searchItems(demoUserId, status, blankToNull(category), blankToNull(location), blankToNull(keyword), pageable);
+        return items.searchItems(listId, status, blankToNull(category), blankToNull(location), blankToNull(keyword), pageable);
     }
 
     private String blankToNull(String value) { return value == null || value.isBlank() ? null : value.trim(); }
 
     @Transactional
-    public Item create(ItemRequest request) {
-        Item item = Item.create(UUID.randomUUID().toString(), demoUserId, request, request.expiresOn());
+    public Item create(String listId, String userId, ItemRequest request) {
+        listAccess.requireEditor(listId, userId);
+        Item item = Item.create(UUID.randomUUID().toString(), listId, userId, request, request.expiresOn());
         item.setExpiresOn(resolveEffectiveExpiry(item, request.expiresOn()));
         validateItem(item);
         validateDates(item.getManufacturedOn(), item.getPurchasedOn(), item.getOpenedOn(), item.getExpiresOn());
@@ -47,8 +49,9 @@ public class ItemService {
     }
 
     @Transactional
-    public Item update(String id, ItemRequest request) {
-        Item item = get(id);
+    public Item update(String listId, String userId, String id, ItemRequest request) {
+        listAccess.requireEditor(listId, userId);
+        Item item = get(listId, userId, id);
         item.apply(request, true);
         if (request.status() == ItemStatus.used_up || request.status() == ItemStatus.discarded)
             item.setQuantity(java.math.BigDecimal.ZERO);
@@ -65,11 +68,15 @@ public class ItemService {
     }
 
     @Transactional
-    public void delete(String id) { get(id).softDelete(); }
+    public void delete(String listId, String userId, String id) {
+        listAccess.requireEditor(listId, userId);
+        get(listId, userId, id).softDelete();
+    }
 
     @Transactional(readOnly = true)
-    public Item get(String id) {
-        return items.findByIdAndUserIdAndDeletedAtIsNull(id, demoUserId)
+    public Item get(String listId, String userId, String id) {
+        listAccess.requireMember(listId, userId);
+        return items.findByIdAndListIdAndDeletedAtIsNull(id, listId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "物品不存在"));
     }
 

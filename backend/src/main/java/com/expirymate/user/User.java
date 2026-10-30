@@ -31,5 +31,12 @@ public class User {
         this.email = email;
         this.passwordHash = passwordHash;
     }
+    public User(String id, String email, String passwordHash, String displayName) {
+        this(id, email, passwordHash);
+        this.displayName = displayName;
+    }
     public String getId() { return id; }
+    public String getEmail() { return email; }
+    public String getPasswordHash() { return passwordHash; }
+    public String getDisplayName() { return displayName; }
 }

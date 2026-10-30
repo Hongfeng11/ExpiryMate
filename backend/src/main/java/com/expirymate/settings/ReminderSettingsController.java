@@ -1,5 +1,7 @@
 package com.expirymate.settings;
 
+import com.expirymate.auth.UserPrincipal;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -14,10 +16,11 @@ public class ReminderSettingsController {
     public ReminderSettingsController(ReminderSettingsService service) { this.service = service; }
 
     @GetMapping
-    public ReminderSettingsResponse get() { return service.get(); }
+    public ReminderSettingsResponse get(@AuthenticationPrincipal UserPrincipal user) { return service.get(user.getId()); }
 
     @PutMapping
-    public ReminderSettingsResponse update(@RequestBody ReminderSettingsRequest request) {
-        return service.update(request);
+    public ReminderSettingsResponse update(@AuthenticationPrincipal UserPrincipal user,
+                                           @RequestBody ReminderSettingsRequest request) {
+        return service.update(user.getId(), request);
     }
 }

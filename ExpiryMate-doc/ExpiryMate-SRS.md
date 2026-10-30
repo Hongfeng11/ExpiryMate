@@ -15,7 +15,8 @@ ExpiryMate 帮助用户记录物品的生产日期、购买日期、保质期和
 
 ### 2.1 第一阶段包含
 
-- 用户注册、登录、退出；每位用户只能访问自己的数据。
+- 用户注册、登录、退出；用户只能访问个人加入的清单。
+- 用户创建共享清单，通过有效期邀请口令邀请其他账号加入；角色分为所有者、编辑者和只读成员。
 - 物品新增、详情、编辑、删除、库存数量调整和处理状态管理。
 - 生产日期、购买日期、未开封保质期、包装标注到期日、开封日期和开封后期限录入。
 - 总览统计、清单、搜索、分类和状态筛选、到期日期排序、分页。
@@ -25,7 +26,7 @@ ExpiryMate 帮助用户记录物品的生产日期、购买日期、保质期和
 
 ### 2.2 后续再评估
 
-条码商品查询、OCR/照片识别、家庭共享、邮件/短信、复杂库存分析、原生 iOS/Android 应用。手动录入和到期提醒不依赖商品信息 API；Web Push 使用浏览器推送能力，不要求接入商品数据 API。
+条码商品查询、OCR/照片识别、邀请邮件/短信、复杂库存分析、原生 iOS/Android 应用。手动录入和到期提醒不依赖商品信息 API；Web Push 使用浏览器推送能力，不要求接入商品数据 API。
 
 ## 3. 用户与使用场景
 
@@ -74,12 +75,15 @@ ExpiryMate 帮助用户记录物品的生产日期、购买日期、保质期和
 | 实体 | 核心字段 | 说明 |
 |---|---|---|
 | User | id、login_id/email、password_hash、timezone、created_at | 密码只保存安全哈希；用户时区用于日期展示和提醒 |
-| Item | id、user_id、name、category、location、quantity、unit、manufactured_on、purchased_on、shelf_life_value、shelf_life_unit、package_expires_on、opened_on、opened_shelf_life_value、opened_shelf_life_unit、expires_on、notes、status、created_at、updated_at、deleted_at | `expires_on` 为考虑开封期限后的最终有效到期日 |
+| SharedList | id、name、created_by、created_at、updated_at | 物品与成员共享的边界 |
+| SharedListMember | id、list_id、user_id、role、joined_at | 唯一约束为 list_id + user_id；角色为 OWNER、EDITOR 或 VIEWER |
+| ListInvitation | id、list_id、token_hash、role、created_by、expires_at、accepted_by、accepted_at | 仅保存口令摘要；口令一次性使用并设置过期时间 |
+| Item | id、user_id、list_id、name、category、location、quantity、unit、manufactured_on、purchased_on、shelf_life_value、shelf_life_unit、package_expires_on、opened_on、opened_shelf_life_value、opened_shelf_life_unit、expires_on、notes、status、created_at、updated_at、deleted_at | `user_id` 记录创建人；`list_id` 控制共享范围；`expires_on` 为考虑开封期限后的最终有效到期日 |
 | ReminderPreference | user_id、enabled、remind_before_days、preferred_time、channels | 一用户一组偏好；可支持多个提前天数 |
 | Notification | id、user_id、item_id、rule_key、scheduled_for、sent_at、read_at、status、dedupe_key | `dedupe_key` 唯一约束，避免重复提醒 |
 | PushSubscription | id、user_id、endpoint、keys、created_at、revoked_at | 仅启用 Web Push 后使用；订阅密钥需要保护 |
 
-校验要求：物品名称必填；使用中的物品数量大于 0，已用完或已丢弃物品数量可为 0；生产、购买和开封日期关系合理；开封后期限必须同时提供开封日期；最终到期日必须可由包装日期、生产日期加保质期或开封日期加开封后期限得出。已保存数据的更新要验证用户拥有该资源。
+校验要求：物品名称必填；使用中的物品数量大于 0，已用完或已丢弃物品数量可为 0；生产、购买和开封日期关系合理；开封后期限必须同时提供开封日期；最终到期日必须可由包装日期、生产日期加保质期或开封日期加开封后期限得出。每次读写物品都要验证当前账号属于对应清单，并按成员角色授权。
 
 ## 7. 前后端分离架构
 

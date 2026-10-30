@@ -1,9 +1,18 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { createItem, isApiMode, listItems, removeItem, updateItem } from './services/items'
+import { createItem, isApiMode, listItems, removeItem, setActiveListId, updateItem } from './services/items'
 import { getReminderSettings, saveReminderSettings } from './services/reminders'
+import { currentUser, signOut } from './services/auth'
+import { acceptInvitation, createInvitation, createList, getLists } from './services/lists'
+import AuthView from './components/AuthView.vue'
 
 const items = ref([])
+const authUser = ref(null)
+const authReady = ref(false)
+const lists = ref([])
+const activeListId = ref('')
+const activeList = computed(() => lists.value.find(list => list.id === activeListId.value) || null)
+const accountInitial = computed(() => (authUser.value?.displayName || authUser.value?.email || '我').slice(0, 1).toUpperCase())
 const selectedNav = ref('overview')
 const activeFilter = ref('all')
 const search = ref('')
@@ -259,18 +268,116 @@ function clearFilters() { search.value = ''; categoryFilter.value = '全部分�
 function openOverviewItems() { clearFilters(); selectedNav.value = 'items' }
 function weekBarHeight(day) { return day.count ? `${Math.max(12, (day.count / nextSevenDaysMax.value) * 100)}%` : '4%' }
 function displayName(item) { return item.name || '未命名物品' }
-onMounted(async () => {
+
+async function loadWorkspace(user, preferredListId = '') {
+  authUser.value = user
+  lists.value = await getLists()
+  if (!lists.value.length) lists.value = [await createList('我的清单')]
+  const storageKey = `expirymate.activeList.${user.id}`
+  const savedId = preferredListId || localStorage.getItem(storageKey)
+  activeListId.value = lists.value.some(list => list.id === savedId) ? savedId : lists.value[0].id
+  localStorage.setItem(storageKey, activeListId.value)
+  setActiveListId(activeListId.value)
   try { reminderSettings.value = await getReminderSettings() }
   catch (error) { errorMessage.value = error.message || '无法读取提醒设置' }
-  await refresh()
+  catalogLoaded = false
+  await refresh({ reloadCatalog: true })
+}
+
+async function onAuthenticated(user) {
+  authReady.value = true
+  try { await loadWorkspace(user) }
+  catch (error) { errorMessage.value = error.message || '无法加载清单' }
+}
+
+async function switchList() {
+  if (!activeListId.value || !authUser.value) return
+  setActiveListId(activeListId.value)
+  localStorage.setItem(`expirymate.activeList.${authUser.value.id}`, activeListId.value)
+  catalogLoaded = false
+  clearFilters()
+  await refresh({ reloadCatalog: true })
+}
+
+async function addSharedList() {
+  const name = window.prompt('给新清单起个名字', '家庭清单')
+  if (!name?.trim()) return
+  try {
+    const list = await createList(name.trim())
+    lists.value = [...lists.value, list]
+    activeListId.value = list.id
+    await switchList()
+  } catch (error) { errorMessage.value = error.message || '创建清单失败' }
+}
+
+async function inviteToList() {
+  if (!activeList.value || activeList.value.role !== 'OWNER') return
+  const role = window.prompt('输入成员权限：EDITOR（可编辑）或 VIEWER（只读）', 'EDITOR')?.trim().toUpperCase()
+  if (!role) return
+  if (!['EDITOR', 'VIEWER'].includes(role)) { errorMessage.value = '请输入 EDITOR 或 VIEWER'; return }
+  try {
+    const invite = await createInvitation(activeList.value.id, role)
+    window.prompt('复制此邀请口令发给清单成员（3 天内有效）', invite.token)
+  } catch (error) { errorMessage.value = error.message || '创建邀请失败' }
+}
+
+async function joinSharedList() {
+  const token = window.prompt('粘贴清单管理员发给你的邀请口令')
+  if (!token?.trim()) return
+  try {
+    const joined = await acceptInvitation(token.trim())
+    lists.value = await getLists()
+    activeListId.value = joined.id
+    await switchList()
+  } catch (error) { errorMessage.value = error.message || '加入清单失败' }
+}
+
+async function logout() {
+  try { await signOut() } catch {}
+  authUser.value = null
+  lists.value = []
+  activeListId.value = ''
+  setActiveListId('')
+  items.value = []
+  catalogItems.value = []
+  authReady.value = true
+}
+
+onMounted(async () => {
+  if (!isApiMode) {
+    authReady.value = true
+    try { reminderSettings.value = await getReminderSettings() } catch {}
+    await refresh()
+    return
+  }
+  try {
+    const user = await currentUser()
+    authReady.value = true
+    if (user) await loadWorkspace(user)
+  } catch (error) {
+    authReady.value = true
+    errorMessage.value = error.message || '暂时无法连接服务'
+  }
 })
 </script>
 
 <template>
-  <div class="app-shell">
+  <AuthView v-if="isApiMode && authReady && !authUser" @authenticated="onAuthenticated" />
+  <div v-else-if="!authReady" class="auth-loading"><span class="brand-mark">◈</span>正在连接你的清单…</div>
+  <div v-else class="app-shell">
     <aside class="sidebar">
       <div class="brand"><span class="brand-mark">◈</span><span>ExpiryMate<small>物品保质期管理</small></span></div>
       <div class="workspace-label">工作空间</div>
+      <div class="list-switcher">
+        <select v-model="activeListId" aria-label="切换共享清单" @change="switchList">
+          <option v-for="list in lists" :key="list.id" :value="list.id">{{ list.name }} · {{ list.memberCount }} 人</option>
+        </select>
+        <button type="button" title="新建清单" @click="addSharedList">＋</button>
+      </div>
+      <div class="list-actions">
+        <button type="button" @click="joinSharedList">加入清单</button>
+        <button v-if="activeList?.role === 'OWNER'" type="button" @click="inviteToList">邀请成员</button>
+      </div>
       <nav class="nav-list">
         <button :class="['nav-link', selectedNav === 'overview' ? 'active' : '']" @click="selectedNav='overview'; activeFilter='all'"><span class="nav-icon">▦</span>总览</button>
         <button :class="['nav-link', selectedNav === 'items' ? 'active' : '']" @click="selectedNav='items'"><span class="nav-icon">▤</span>物品清单<span class="nav-count">{{ catalogItems.length }}</span></button>
@@ -283,13 +390,13 @@ onMounted(async () => {
       <button class="category-link" @click="categoryFilter='保健品'; selectedNav='items'"><i class="category-dot health"></i>保健品 <span>{{ items.filter(i=>i.category==='保健品').length }}</span></button>
       <div class="sidebar-bottom">
         <div class="tip-card"><div class="tip-icon">✦</div><strong>少一点浪费</strong><p>让每一件物品都在新鲜时被好好使用。</p></div>
-        <div class="profile"><div class="avatar">林</div><div><strong>我的家庭</strong><small>个人空间</small></div><button aria-label="提醒设置" title="提醒设置" @click="openReminderSettings">⚙</button></div>
+        <div class="profile"><div class="avatar">{{ accountInitial }}</div><div><strong>{{ authUser?.displayName || '家庭成员' }}</strong><small>{{ authUser?.email || '个人空间' }}</small></div><button aria-label="提醒设置" title="提醒设置" @click="openReminderSettings">⚙</button><button aria-label="退出登录" title="退出登录" @click="logout">↪</button></div>
       </div>
     </aside>
 
     <main class="main-area">
       <header class="topbar">
-        <div class="breadcrumb">ExpiryMate <span>/</span> {{ selectedNav === 'items' ? '物品清单' : '总览' }}</div>
+        <div class="breadcrumb"><select class="mobile-list-select" v-model="activeListId" aria-label="切换共享清单" @change="switchList"><option v-for="list in lists" :key="list.id" :value="list.id">{{ list.name }}</option></select>ExpiryMate <span>/</span> {{ selectedNav === 'items' ? '物品清单' : '总览' }}</div>
         <div class="top-actions">
           <label class="global-search"><span>⌕</span><input v-model="search" placeholder="搜索物品、分类或位置" /><kbd>⌘ K</kbd></label>
           <button class="icon-button notification-button" aria-label="通知" @click="showNotifications=!showNotifications">♧<span v-if="unreadNotifications" class="notification-badge"></span></button>
@@ -308,7 +415,7 @@ onMounted(async () => {
       <section class="page-content">
         <div class="welcome-row">
           <div><div class="eyebrow"><span class="live-dot"></span>你的家庭物品状态</div><h1>{{ selectedNav === 'items' ? '物品清单' : '物品总览' }}</h1><p class="page-subtitle">{{ selectedNav === 'items' ? '把每件物品的状态和到期时间都管理好。' : `今天是 ${new Date().getMonth()+1} 月 ${new Date().getDate()} 日 · 为新鲜留一点心思。` }}</p></div>
-          <div class="welcome-actions"><button class="secondary-button" @click="showNotifications=!showNotifications"><span>◷</span>提醒中心<span v-if="unreadNotifications" class="button-count">{{ unreadNotifications }}</span></button><button class="primary-button" @click="openAdd"><span class="plus">＋</span>添加物品</button></div>
+          <div class="welcome-actions"><button class="secondary-button" @click="showNotifications=!showNotifications"><span>◷</span>提醒中心<span v-if="unreadNotifications" class="button-count">{{ unreadNotifications }}</span></button><button v-if="activeList?.role !== 'VIEWER'" class="primary-button" @click="openAdd"><span class="plus">＋</span>添加物品</button></div>
         </div>
 
         <div class="stats-grid">
@@ -338,7 +445,7 @@ onMounted(async () => {
                     <td class="date-cell">{{ dateLabel(item.purchasedOn || item.purchased_on) }}</td>
                     <td><strong class="expiry-date">{{ dateLabel(item.expiresOn || item.expires_on) }}</strong><small class="year-label">{{ (item.expiresOn || item.expires_on || '').slice(0,4) }}</small></td>
                     <td><span :class="['status-badge', `badge-${itemState(item)}`]"><i></i>{{ stateLabel(item) }}</span></td>
-                    <td><div class="row-actions"><button title="编辑物品" @click="openEdit(item)">✎</button><select class="status-select" :value="item.status || 'active'" :aria-label="`${item.name}处理状态`" @change="setItemStatus(item,$event.target.value)"><option value="active">使用中</option><option value="used_up">已用完</option><option value="discarded">已丢弃</option><option value="processed">已处理</option></select><button title="删除物品" @click="deleteItem(item)">×</button></div></td>
+                    <td><div v-if="activeList?.role !== 'VIEWER'" class="row-actions"><button title="编辑物品" @click="openEdit(item)">✎</button><select class="status-select" :value="item.status || 'active'" :aria-label="`${item.name}处理状态`" @change="setItemStatus(item,$event.target.value)"><option value="active">使用中</option><option value="used_up">已用完</option><option value="discarded">已丢弃</option><option value="processed">已处理</option></select><button title="删除物品" @click="deleteItem(item)">×</button></div><span v-else class="readonly-label">只读</span></td>
                   </tr>
                 </tbody>
               </table>

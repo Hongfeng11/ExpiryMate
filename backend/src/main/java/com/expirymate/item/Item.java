@@ -12,6 +12,8 @@ public class Item {
     private String id;
     @Column(name = "user_id", nullable = false, length = 36, columnDefinition = "char(36)")
     private String userId;
+    @Column(name = "list_id", nullable = false, length = 36, columnDefinition = "char(36)")
+    private String listId;
     @Column(nullable = false, length = 120)
     private String name;
     @Column(nullable = false, length = 60)
@@ -53,9 +55,10 @@ public class Item {
 
     protected Item() {}
 
-    public static Item create(String id, String userId, ItemRequest request, LocalDate expiresOn) {
+    public static Item create(String id, String listId, String userId, ItemRequest request, LocalDate expiresOn) {
         Item item = new Item();
         item.id = id;
+        item.listId = listId;
         item.userId = userId;
         item.apply(request, false);
         item.expiresOn = expiresOn;
@@ -94,6 +97,7 @@ public class Item {
     public void setQuantity(BigDecimal quantity) { this.quantity = quantity; }
     public String getId() { return id; }
     public String getUserId() { return userId; }
+    public String getListId() { return listId; }
     public String getName() { return name; }
     public String getCategory() { return category; }
     public String getLocation() { return location; }
