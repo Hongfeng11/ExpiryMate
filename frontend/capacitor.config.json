@@ -1,0 +1,8 @@
+{
+  "appId": "com.expirymate.app",
+  "appName": "ExpiryMate",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}

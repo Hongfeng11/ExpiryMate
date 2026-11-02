@@ -6,3 +6,72 @@
 .quantity-control{display:flex!important;align-items:center;gap:4px}.quantity-control button{width:17px;height:17px;padding:0;border:1px solid #e9edf3;border-radius:5px;background:#fff;color:#6b7ac3;font-size:12px;line-height:1}.quantity-control button:disabled{opacity:.35}.quantity-control b{font-size:9px;font-weight:600;color:#748097;white-space:nowrap}.quantity-control i{max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-style:normal}.row-actions{align-items:center}.status-select{max-width:88px;height:26px;padding:0 4px;border:1px solid #edf0f5;border-radius:7px;background:#fff;color:#7c88a0;font-size:9px}.filter-tabs{overflow-x:auto;scrollbar-width:none}.filter-tabs::-webkit-scrollbar{display:none}.toolbar-controls{flex-wrap:wrap;justify-content:flex-end}.toolbar-controls select{max-width:115px}.reset-filters{height:30px;padding:0 8px;border:0;border-radius:8px;background:#f5f6fa;color:#78859b;font-size:10px}.reset-filters:hover{background:#eef0ff;color:#546bce}
 .expiry-week-card{min-height:149px;padding:15px 18px 12px;border:1px solid #e8eaff;border-radius:16px;background:linear-gradient(120deg,#f8f8ff,#f0f3ff);box-shadow:0 4px 12px #25355e08}.expiry-week-heading{display:flex;align-items:center;justify-content:space-between}.expiry-week-heading .freshness-label{display:block;color:#8189a7;font-size:10px}.expiry-week-heading strong{display:block;margin-top:3px;color:#3c4e9e;font-size:21px}.expiry-week-heading strong small{margin-left:4px;color:#929ab0;font-size:10px;font-weight:500}.expiry-week-heading button{padding:6px 8px;border:0;border-radius:7px;background:#fff;color:#596fce;font-size:9px}.expiry-week-heading button span{margin-left:3px}.expiry-week-chart{height:73px;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-top:7px}.expiry-day{min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end}.expiry-day-count{height:12px;color:#6a79cc;font-size:8px;font-weight:700}.expiry-bar-track{width:100%;height:42px;display:flex;align-items:flex-end;justify-content:center}.expiry-bar-track i{display:block;width:min(18px,70%);min-height:2px;border-radius:5px 5px 2px 2px;background:#d8defb}.expiry-bar-track i.has-expiry{background:linear-gradient(180deg,#8292ee,#6277dd)}.expiry-day-label{margin-top:3px;color:#7d88a0;font-size:8px}.expiry-day small{margin-top:2px;color:#a6adba;font-size:7px}.expiry-week-note{margin:7px 0 0;color:#9aa3b1;font-size:8px}
 .reminder-settings-modal{width:min(520px,100%)}.settings-content{padding:22px 27px 24px}.settings-toggle{display:flex;align-items:center;justify-content:space-between;padding:14px 15px;border:1px solid #edf0f5;border-radius:12px;background:#fafbfe}.settings-toggle strong,.settings-toggle small,.settings-group>strong,.settings-group>small{display:block}.settings-toggle strong,.settings-group>strong{color:#3c4862;font-size:12px}.settings-toggle small,.settings-group>small{margin-top:5px;color:#99a2b1;font-size:10px}.settings-toggle input{width:18px;height:18px;accent-color:#596fda}.settings-group{display:block;margin-top:23px}.reminder-day-options{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.reminder-day-options button{height:34px;padding:0 12px;border:1px solid #e8ebf2;border-radius:9px;background:#fff;color:#748097;font-size:10px}.reminder-day-options button.selected{border-color:#cbd2ff;background:#f0f2ff;color:#5268cf;font-weight:700}.reminder-time input{display:block;width:140px;height:37px;margin-top:11px;padding:0 10px;border:1px solid #e7eaf0;border-radius:9px;background:#fff;color:#37435d}.settings-note{margin:21px 0 0;padding:11px 12px;border-radius:9px;background:#f6f7fb;color:#8792a5;font-size:10px;line-height:1.6}.settings-success{margin-top:12px;color:#34835c;font-size:11px}.settings-content .modal-footer{margin-top:20px}
+
+/* Mobile-first item cards and touch-friendly controls */
+.mobile-item-list{display:none}
+@media(max-width:760px){
+  body{min-width:0}
+  .table-wrap{display:none}
+  .mobile-item-list{display:grid;gap:10px;padding:10px 12px 14px}
+  .mobile-item-card{min-width:0;padding:13px;border:1px solid #edf0f4;border-radius:13px;background:#fff;box-shadow:0 3px 12px #26344d08}
+  .mobile-item-heading{display:flex;align-items:center;gap:9px;min-width:0}
+  .mobile-item-heading .item-emoji{width:38px;height:38px;flex:none}
+  .mobile-item-title{min-width:0;flex:1}
+  .mobile-item-title strong,.mobile-item-title small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mobile-item-title strong{color:#37435d;font-size:13px}
+  .mobile-item-title small{margin-top:4px;color:#9aa3b1;font-size:10px}
+  .mobile-item-heading .status-badge{flex:none;padding:5px 7px;font-size:9px}
+  .mobile-item-meta{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px;padding:10px 0;border-top:1px solid #f1f3f6;border-bottom:1px solid #f1f3f6;color:#9aa3b1;font-size:10px}
+  .mobile-item-meta span{display:flex;justify-content:space-between;gap:5px}
+  .mobile-item-meta b{color:#647087;font-weight:600;text-align:right}
+  .mobile-item-actions{display:flex;align-items:center;gap:7px;margin-top:10px}
+  .mobile-item-actions>button,.mobile-item-actions .status-select{height:32px;padding:0 9px;border:1px solid #e9edf2;border-radius:8px;background:#fff;color:#68758c;font-size:11px}
+  .mobile-item-actions .status-select{flex:1;max-width:none}
+  .mobile-quantity{display:flex;gap:5px;margin-right:auto}
+  .mobile-quantity button{width:32px;height:32px;border:1px solid #e9edf2;border-radius:8px;background:#f9fafc;color:#6377d4;font-size:17px}
+  .mobile-quantity button:disabled{opacity:.4}
+  .mobile-item-actions .mobile-delete{color:#ba706b}
+  .mobile-list-message{display:grid;justify-items:center;gap:7px;padding:34px 12px;color:#98a2b2;text-align:center;font-size:11px}
+  .mobile-list-message strong{color:#536079;font-size:13px}
+  .mobile-list-message button{margin-top:4px;padding:8px 12px;border:0;border-radius:8px;background:#eef0ff;color:#586ccc}
+  .toolbar{display:block;padding:0 12px 9px}
+  .filter-tabs{width:100%;height:43px;gap:17px}
+  .toolbar-controls{justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;padding:5px 0;scrollbar-width:none}
+  .toolbar-controls::-webkit-scrollbar{display:none}
+  .toolbar-controls select{max-width:130px;flex:1;min-width:0}
+  .sort-button,.reset-filters{flex:none;white-space:nowrap}
+  .table-footer{padding:0 13px}
+  .pagination button:nth-of-type(n+3){display:none}
+  .topbar{gap:8px}
+  .breadcrumb{min-width:0;display:flex;align-items:center;overflow:hidden;white-space:nowrap}
+  .mobile-list-select{min-width:0;max-width:105px;text-overflow:ellipsis}
+  .top-actions{min-width:0;gap:6px}
+  .global-search{min-width:34px;width:min(38vw,180px);padding:0 8px}
+  .global-search input{min-width:0}
+  .notification-button{flex:none}
+  .welcome-row{gap:8px}
+  .welcome-row>div:first-child{min-width:0}
+  .welcome-actions{flex:none}
+  .welcome-actions .secondary-button{display:inline-flex;width:36px;min-width:36px;height:36px;justify-content:center;padding:0;font-size:0}
+  .welcome-actions .primary-button{height:36px;padding:0 9px}
+  .modal-backdrop{padding:0;align-items:end}
+  .item-modal{width:100%;max-height:92dvh;border-radius:18px 18px 0 0;padding-bottom:env(safe-area-inset-bottom)}
+  .form-field input,.form-field select,.form-field textarea{font-size:16px}
+  .sidebar{height:calc(62px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom)}
+  .main-area{padding-bottom:calc(70px + env(safe-area-inset-bottom))}
+  .toast-error{right:12px;bottom:calc(72px + env(safe-area-inset-bottom));left:12px}
+}
+@media(max-width:390px){
+  .page-content{padding-right:11px;padding-left:11px}
+  .topbar{padding-right:10px;padding-left:10px}
+  .global-search{width:34px;justify-content:center}
+  .global-search input{display:none}
+  .global-search:focus-within{position:absolute;left:10px;right:92px;z-index:2;width:auto;background:#fff;box-shadow:0 4px 15px #26344d18}
+  .global-search:focus-within input{display:block}
+  .mobile-list-select{max-width:88px;margin-right:4px}
+  .welcome-row h1{font-size:20px}
+  .page-subtitle{max-width:175px}
+  .mobile-item-card{padding:11px}
+  .mobile-item-actions{gap:5px}
+  .mobile-item-actions>button,.mobile-item-actions .status-select{padding:0 7px;font-size:10px}
+}

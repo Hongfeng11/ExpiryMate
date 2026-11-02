@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ExpiryMate</string>
+    <string name="title_activity_main">ExpiryMate</string>
+    <string name="package_name">com.expirymate.app</string>
+    <string name="custom_url_scheme">com.expirymate.app</string>
+</resources>

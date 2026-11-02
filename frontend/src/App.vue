@@ -450,6 +450,16 @@ onMounted(async () => {
                 </tbody>
               </table>
             </div>
+            <div class="mobile-item-list">
+              <div v-if="loading" class="mobile-list-message">正在加载物品…</div>
+              <div v-else-if="!filteredItems.length" class="mobile-list-message"><strong>没有找到物品</strong><span>换个关键词或调整筛选条件试试</span><button @click="clearFilters">清除筛选</button></div>
+              <article v-for="item in filteredItems" :key="item.id" class="mobile-item-card">
+                <div class="mobile-item-heading"><span :class="['item-emoji', `emoji-${item.color || 'green'}`]">{{ item.emoji || '📦' }}</span><div class="mobile-item-title"><strong>{{ displayName(item) }}</strong><small>{{ item.category || '其他' }} · {{ item.location || '未设置位置' }}</small></div><span :class="['status-badge', `badge-${itemState(item)}`]"><i></i>{{ stateLabel(item) }}</span></div>
+                <div class="mobile-item-meta"><span>到期日期 <b>{{ dateLabel(item.expiresOn || item.expires_on) }}</b></span><span>库存 <b>{{ item.quantity ?? 1 }} {{ item.unit || '件' }}</b></span><span>购买日期 <b>{{ dateLabel(item.purchasedOn || item.purchased_on) }}</b></span></div>
+                <div v-if="activeList?.role !== 'VIEWER'" class="mobile-item-actions"><div class="mobile-quantity"><button type="button" :disabled="itemState(item)==='done'" :aria-label="`减少${item.name}库存`" @click="adjustQuantity(item,-1)">−</button><button type="button" :aria-label="`增加${item.name}库存`" @click="adjustQuantity(item,1)">＋</button></div><button type="button" @click="openEdit(item)">编辑</button><select class="status-select" :value="item.status || 'active'" :aria-label="`${item.name}处理状态`" @change="setItemStatus(item,$event.target.value)"><option value="active">使用中</option><option value="used_up">已用完</option><option value="discarded">已丢弃</option><option value="processed">已处理</option></select><button type="button" class="mobile-delete" @click="deleteItem(item)">删除</button></div>
+                <div v-else class="mobile-item-actions"><span class="readonly-label">只读成员</span></div>
+              </article>
+            </div>
             <div class="table-footer"><span>显示 {{ filteredItems.length }} 件物品</span><div class="pagination"><button disabled>‹</button><button class="page-active">1</button><button>2</button><button>3</button><button>›</button></div></div>
           </section>
 
