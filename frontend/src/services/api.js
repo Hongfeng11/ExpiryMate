@@ -1,8 +1,8 @@
 const isNativeApp = typeof window !== 'undefined' && Boolean(window.Capacitor?.isNativePlatform?.())
 const browserApiBase = typeof window === 'undefined' ? '' : `${window.location.protocol}//${window.location.hostname}:8080`
-// Android emulator reaches the development computer through 10.0.2.2.
-// Set VITE_API_BASE_URL for physical devices and production builds.
-const nativeApiBase = isNativeApp ? 'http://10.0.2.2:8080' : browserApiBase
+// For emulator development, use adb reverse tcp:8080 tcp:8080.
+// Set VITE_API_BASE_URL to a reachable HTTPS API for production/device builds.
+const nativeApiBase = isNativeApp ? 'http://localhost:8080' : browserApiBase
 export const API_BASE = (import.meta.env.VITE_API_BASE_URL || nativeApiBase).replace(/\/$/, '')
 
 export async function apiRequest(path, options = {}) {

@@ -4,6 +4,8 @@ import { createItem, isApiMode, listItems, removeItem, setActiveListId, updateIt
 import { getReminderSettings, saveReminderSettings } from './services/reminders'
 import { currentUser, signOut } from './services/auth'
 import { acceptInvitation, createInvitation, createList, getLists } from './services/lists'
+import { loadRecognitionSettings, recognizeProductImage, saveRecognitionSettings } from './services/productRecognition'
+import { askFoodAssistant } from './services/assistant'
 import AuthView from './components/AuthView.vue'
 
 const items = ref([])
@@ -29,6 +31,18 @@ const notificationRead = ref(false)
 const saving = ref(false)
 const editingId = ref(null)
 const form = ref(emptyForm())
+const recognitionSettings = ref(loadRecognitionSettings())
+const showRecognitionConfig = ref(false)
+const recognizingProduct = ref(false)
+const recognitionError = ref('')
+const recognitionMessage = ref('')
+const recognitionImage = ref('')
+const photoInput = ref(null)
+const showAssistant = ref(false)
+const assistantMessages = ref([])
+const assistantInput = ref('')
+const assistantBusy = ref(false)
+const assistantError = ref('')
 const reminderSettings = ref({ enabled: true, remindBeforeDays: [7, 3, 1, 0], preferredTime: '09:00' })
 const reminderDraft = ref({ enabled: true, remindBeforeDays: [7, 3, 1, 0], preferredTime: '09:00' })
 const reminderSaving = ref(false)
@@ -84,6 +98,15 @@ function dateLabel(value) {
   return `${d.getMonth() + 1}月${String(d.getDate()).padStart(2, '0')}日`
 }
 const activeItems = computed(() => catalogItems.value.filter(item => item.status === 'active' || !item.status))
+const assistantFoodItems = computed(() => activeItems.value.filter(item => (item.category || '食品') === '食品').map(item => ({
+  name: item.name,
+  expiresOn: item.expiresOn || item.expires_on || null,
+  daysLeft: daysLeft(item.expiresOn || item.expires_on),
+  quantity: item.quantity ?? 1,
+  unit: item.unit || '件',
+  location: item.location || null,
+  openedOn: item.openedOn || item.opened_on || null,
+})))
 const reminderWindow = computed(() => Math.max(0, ...reminderSettings.value.remindBeforeDays))
 const expiringCount = computed(() => activeItems.value.filter(item => itemState(item) === 'soon').length)
 const expiredCount = computed(() => activeItems.value.filter(item => itemState(item) === 'expired').length)
@@ -177,7 +200,25 @@ async function persistReminderSettings() {
   } catch (error) { reminderError.value = error.message || '保存提醒设置失败' }
   finally { reminderSaving.value = false }
 }
-function openAdd() { editingId.value = null; form.value = emptyForm(); errorMessage.value = ''; showModal.value = true }
+function openAdd() { editingId.value = null; form.value = emptyForm(); errorMessage.value = ''; recognitionError.value = ''; recognitionMessage.value = ''; recognitionImage.value = ''; showRecognitionConfig.value = false; showModal.value = true }
+function openFoodAssistant(prompt = '') {
+  showAssistant.value = true
+  assistantError.value = ''
+  if (prompt) sendAssistantMessage(prompt)
+}
+async function sendAssistantMessage(text = assistantInput.value) {
+  const content = String(text || '').trim()
+  if (!content || assistantBusy.value) return
+  assistantInput.value = ''
+  assistantError.value = ''
+  assistantMessages.value.push({ role: 'user', content })
+  assistantBusy.value = true
+  try {
+    const answer = await askFoodAssistant(assistantMessages.value.map(({ role, content: message }) => ({ role, content: message })), assistantFoodItems.value)
+    assistantMessages.value.push({ role: 'assistant', content: answer })
+  } catch (error) { assistantError.value = error.message || 'AI 暂时无法回答，请检查 API 设置' }
+  finally { assistantBusy.value = false }
+}
 function openEdit(item) {
   editingId.value = item.id
   const hasStoredShelfLife = item.shelfLifeValue || item.shelf_life_value
@@ -234,6 +275,54 @@ async function saveItem() {
     await refresh({ reloadCatalog: true })
   } catch (error) { errorMessage.value = error.message || '保存失败，请稍后重试' }
   finally { saving.value = false }
+}
+function saveRecognitionApiSettings() {
+  try {
+    recognitionSettings.value = saveRecognitionSettings(recognitionSettings.value)
+    recognitionMessage.value = '识图 API 设置已保存在此设备'
+    recognitionError.value = ''
+    showRecognitionConfig.value = false
+  } catch (error) { recognitionError.value = error.message || '保存 API 设置失败' }
+}
+function readImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = () => reject(new Error('读取照片失败，请重试'))
+    reader.readAsDataURL(file)
+  })
+}
+async function onProductPhoto(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  recognitionError.value = ''
+  recognitionMessage.value = ''
+  if (!file.type.startsWith('image/')) { recognitionError.value = '请选择图片文件'; return }
+  if (file.size > 12 * 1024 * 1024) { recognitionError.value = '照片不能超过 12 MB'; return }
+  if (!recognitionSettings.value.endpoint || !recognitionSettings.value.model) {
+    showRecognitionConfig.value = true
+    recognitionError.value = '先填写识图 API 地址和模型名称'
+    return
+  }
+  recognizingProduct.value = true
+  try {
+    recognitionImage.value = await readImage(file)
+    const result = await recognizeProductImage(recognitionImage.value, recognitionSettings.value)
+    const categories = ['食品', '个护', '保健品', '清洁', '其他']
+    if (typeof result.name === 'string' && result.name.trim()) form.value.name = result.name.trim().slice(0, 120)
+    if (categories.includes(result.category)) form.value.category = result.category
+    for (const field of ['manufacturedOn', 'purchasedOn', 'packageExpiresOn']) {
+      if (typeof result[field] === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(result[field])) form.value[field] = result[field]
+    }
+    if (result.shelfLifeValue !== '' && Number.isInteger(Number(result.shelfLifeValue)) && Number(result.shelfLifeValue) > 0) form.value.shelfLifeValue = String(result.shelfLifeValue)
+    if (['天', '月', '年'].includes(result.shelfLifeUnit)) form.value.shelfLifeUnit = result.shelfLifeUnit
+    if (typeof result.location === 'string' && result.location.trim()) form.value.location = result.location.trim().slice(0, 120)
+    if (Number.isFinite(Number(result.quantity)) && Number(result.quantity) > 0) form.value.quantity = Number(result.quantity)
+    if (typeof result.unit === 'string' && result.unit.trim()) form.value.unit = result.unit.trim().slice(0, 20)
+    recognitionMessage.value = '识别完成，请核对信息和日期后再保存'
+  } catch (error) { recognitionError.value = error.message || '识别失败，请检查 API 设置后重试' }
+  finally { recognizingProduct.value = false }
 }
 function emojiFor(category) { return ({ 食品: '🥬', 个护: '🧴', 保健品: '💊', 清洁: '🧽' })[category] || '📦' }
 function colorFor(category) { return ({ 食品: 'green', 个护: 'blue', 保健品: 'violet', 清洁: 'cyan' })[category] || 'amber' }
@@ -415,7 +504,7 @@ onMounted(async () => {
       <section class="page-content">
         <div class="welcome-row">
           <div><div class="eyebrow"><span class="live-dot"></span>你的家庭物品状态</div><h1>{{ selectedNav === 'items' ? '物品清单' : '物品总览' }}</h1><p class="page-subtitle">{{ selectedNav === 'items' ? '把每件物品的状态和到期时间都管理好。' : `今天是 ${new Date().getMonth()+1} 月 ${new Date().getDate()} 日 · 为新鲜留一点心思。` }}</p></div>
-          <div class="welcome-actions"><button class="secondary-button" @click="showNotifications=!showNotifications"><span>◷</span>提醒中心<span v-if="unreadNotifications" class="button-count">{{ unreadNotifications }}</span></button><button v-if="activeList?.role !== 'VIEWER'" class="primary-button" @click="openAdd"><span class="plus">＋</span>添加物品</button></div>
+          <div class="welcome-actions"><button class="secondary-button assistant-open-button" @click="openFoodAssistant()"><span>✦</span>AI 饮食助手</button><button class="secondary-button" @click="showNotifications=!showNotifications"><span>◷</span>提醒中心<span v-if="unreadNotifications" class="button-count">{{ unreadNotifications }}</span></button><button v-if="activeList?.role !== 'VIEWER'" class="primary-button" @click="openAdd"><span class="plus">＋</span>添加物品</button></div>
         </div>
 
         <div class="stats-grid">
@@ -477,6 +566,20 @@ onMounted(async () => {
       <section class="item-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <header class="modal-header"><div><span class="modal-kicker">{{ editingId ? '更新物品信息' : '记录新物品' }}</span><h2 id="modal-title">{{ editingId ? '编辑物品' : '添加到你的物品清单' }}</h2><p>包装上的信息可以稍后补充。</p></div><button class="modal-close" aria-label="关闭" @click="showModal=false">×</button></header>
         <form @submit.prevent="saveItem">
+          <section class="recognition-box">
+            <div class="recognition-heading"><div><strong>拍照识别商品信息</strong><small>拍摄包装，自动填写名称和日期，识别后请核对</small></div><button type="button" class="recognition-config-toggle" @click="showRecognitionConfig = !showRecognitionConfig">{{ showRecognitionConfig ? '收起设置' : '配置 API' }}</button></div>
+            <div class="recognition-actions"><input ref="photoInput" class="photo-input-hidden" type="file" accept="image/*" capture="environment" @change="onProductPhoto" /><button type="button" class="secondary-button photo-button" :disabled="recognizingProduct" @click="photoInput?.click()"><span>▧</span>{{ recognizingProduct ? '正在识别…' : '拍照 / 选择照片' }}</button><span v-if="recognitionSettings.model" class="recognition-model-tag">{{ recognitionSettings.model }}</span></div>
+            <img v-if="recognitionImage" class="recognition-preview" :src="recognitionImage" alt="待识别的商品照片" />
+            <div v-if="showRecognitionConfig" class="recognition-config">
+              <label class="form-field"><span>API 完整地址</span><input v-model="recognitionSettings.endpoint" type="url" placeholder="https://api.example.com/v1/chat/completions" /></label>
+              <label class="form-field"><span>模型名称</span><input v-model="recognitionSettings.model" placeholder="例如：gpt-4o-mini" /></label>
+              <label class="form-field"><span>API Key（可选）</span><input v-model="recognitionSettings.apiKey" type="password" autocomplete="off" placeholder="sk-…" /></label>
+              <p class="recognition-note">支持 OpenAI Chat Completions 兼容的图片识别接口。照片和 API Key 会从此设备直接发送到你填写的服务商；设置保存在此设备浏览器中。请勿填写不可信的 API 地址。服务商需允许跨域请求（CORS）。</p>
+              <button type="button" class="recognition-save" @click="saveRecognitionApiSettings">保存 API 设置</button>
+            </div>
+            <p v-if="recognitionError" class="form-error recognition-status">{{ recognitionError }}</p>
+            <p v-if="recognitionMessage" class="recognition-success">{{ recognitionMessage }}</p>
+          </section>
           <div class="form-grid"><label class="form-field span-two"><span>物品名称 <b>*</b></span><input v-model="form.name" autofocus placeholder="例如：鲜牛奶" /></label>
             <label class="form-field"><span>分类</span><select v-model="form.category"><option>食品</option><option>个护</option><option>保健品</option><option>清洁</option><option>其他</option></select></label>
             <label class="form-field"><span>存放位置</span><input v-model="form.location" placeholder="例如：冷藏室" /></label>
@@ -492,6 +595,30 @@ onMounted(async () => {
           <div v-if="errorMessage" class="form-error">{{ errorMessage }}</div>
           <div class="modal-footer"><button type="button" class="secondary-button" @click="showModal=false">取消</button><button type="submit" class="primary-button" :disabled="saving">{{ saving ? '保存中…' : editingId ? '保存修改' : '保存物品' }}</button></div>
         </form>
+      </section>
+    </div>
+    <div v-if="showAssistant" class="modal-backdrop assistant-backdrop" @click.self="showAssistant=false">
+      <section class="item-modal assistant-modal" role="dialog" aria-modal="true" aria-labelledby="assistant-title">
+        <header class="modal-header"><div><span class="modal-kicker">ExpiryMate AI</span><h2 id="assistant-title">AI 饮食助手</h2><p>结合当前清单，安排先吃什么或推荐菜谱。</p></div><button class="modal-close" aria-label="关闭" @click="showAssistant=false">×</button></header>
+        <div class="assistant-content">
+          <div class="assistant-context"><span>当前清单：{{ activeList?.name || '本地清单' }}</span><b>{{ assistantFoodItems.length }} 种食品</b></div>
+          <div class="assistant-quick-prompts"><button type="button" @click="sendAssistantMessage('请按优先顺序告诉我这些食品应该先处理什么，并说明原因。')">✦ 临期优先顺序</button><button type="button" @click="sendAssistantMessage('用清单里尚未过期的食材推荐两道简单菜谱。')">♨ 推荐菜谱</button></div>
+          <div class="assistant-transcript" aria-live="polite">
+            <div v-if="!assistantMessages.length" class="assistant-welcome"><span>✦</span><strong>今天先处理什么？</strong><p>我会优先参考离到期日最近的食品，也可以用现有食材给你推荐菜谱。</p></div>
+            <div v-for="(message, index) in assistantMessages" :key="index" :class="['assistant-message', `message-${message.role}`]"><span>{{ message.role === 'user' ? '你' : 'AI 助手' }}</span><p>{{ message.content }}</p></div>
+            <div v-if="assistantBusy" class="assistant-typing">正在根据当前清单整理建议…</div>
+          </div>
+          <div v-if="showRecognitionConfig" class="assistant-api-config">
+            <div class="assistant-api-heading"><strong>AI API 设置</strong><button type="button" @click="showRecognitionConfig=false">收起</button></div>
+            <label class="form-field"><span>API 完整地址</span><input v-model="recognitionSettings.endpoint" type="url" placeholder="https://api.example.com/v1/chat/completions" /></label>
+            <label class="form-field"><span>模型名称</span><input v-model="recognitionSettings.model" placeholder="例如：gpt-4o-mini" /></label>
+            <label class="form-field"><span>API Key</span><input v-model="recognitionSettings.apiKey" type="password" autocomplete="off" placeholder="sk-…" /></label>
+            <p>使用支持 OpenAI Chat Completions 格式的模型。当前清单中的食品名称、数量和日期会发送到你填写的 API。</p>
+            <button type="button" class="recognition-save" @click="saveRecognitionApiSettings">保存 API 设置</button>
+          </div>
+          <div v-if="assistantError" class="assistant-error">{{ assistantError }} <button type="button" @click="showRecognitionConfig=true">配置 API</button></div>
+          <form class="assistant-composer" @submit.prevent="sendAssistantMessage()"><textarea v-model="assistantInput" rows="2" placeholder="例如：冰箱里什么最该先吃？" :disabled="assistantBusy" @keydown.enter.exact.prevent="sendAssistantMessage()"></textarea><button type="submit" class="primary-button" :disabled="assistantBusy || !assistantInput.trim()">发送</button></form>
+        </div>
       </section>
     </div>
     <div v-if="showReminderSettings" class="modal-backdrop" @click.self="showReminderSettings=false">

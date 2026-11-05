@@ -1,4 +1,4 @@
-# ExpiryMate 后端
+# z's 后端
 
 基于 Java 21、Spring Boot 3.5、Spring Security、Spring Data JPA、Flyway 与 MySQL 8.0.16+。后端独立于 Vue 前端，默认 API 地址为 `http://localhost:8080`。
 

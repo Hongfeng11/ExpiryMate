@@ -3,6 +3,6 @@
   "appName": "ExpiryMate",
   "webDir": "dist",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "http"
   }
 }
