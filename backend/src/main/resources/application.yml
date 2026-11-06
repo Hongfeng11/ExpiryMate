@@ -36,5 +36,9 @@ management:
 app:
   mode: ${APP_MODE:accounts}
   demo-user-id: ${DEMO_USER_ID:00000000-0000-4000-8000-000000000001}
+  ai:
+    endpoint: ${AI_API_URL:}
+    api-key: ${AI_API_KEY:}
+    model: ${AI_MODEL:}
   cors:
     allowed-origins: ${FRONTEND_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}

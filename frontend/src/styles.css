@@ -99,6 +99,13 @@
 @media(max-width:760px){.recognition-box{margin:0 18px 15px;padding:12px}.recognition-heading small{max-width:230px;line-height:1.5}.recognition-config .form-field input{font-size:16px}}
 
 .assistant-open-button{border-color:#e8e7f4;background:#faf9ff;color:#6559a7}
+.settings-api-section{display:grid;gap:10px;padding-bottom:16px;border-bottom:1px solid #edf0f5}
+.settings-api-heading{margin:0 0 2px}
+.settings-api-section .form-field>span{font-size:11px}
+.settings-api-section .form-field input{height:39px;padding:0 11px;border:1px solid #e7eaf0;border-radius:9px;background:#fff;color:#37435d;font-size:12px}
+.settings-api-actions{display:flex;justify-content:flex-end;gap:9px}
+.settings-api-actions button{min-height:36px;padding:0 12px;font-size:11px}
+.settings-content{max-height:min(72vh,620px);overflow:auto}
 .assistant-modal{width:min(620px,100%);display:flex;flex-direction:column;max-height:min(88vh,760px)}
 .assistant-content{display:flex;min-height:0;flex-direction:column;padding:14px 22px 18px}
 .assistant-context{display:flex;justify-content:space-between;gap:8px;color:#869184;font-size:10px}

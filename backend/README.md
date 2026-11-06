@@ -10,6 +10,23 @@
 4. 在本目录运行 `mvn spring-boot:run`。Flyway 会按版本迁移数据库。
 5. 前端默认访问 `http://127.0.0.1:8080`。如使用其他主机名，在 `frontend/.env.local` 配置 `VITE_API_BASE_URL`，并使其与浏览器使用的主机名一致。
 
+## AI 与照片识别 API
+
+网页不再保存或提交服务商 API Key。后端从环境变量读取配置，前端调用需要登录的 `POST /api/v1/ai/chat` 与 `POST /api/v1/ai/recognize`，由后端转发到 OpenAI Chat Completions 兼容接口。照片识别需选用支持图片输入的模型。
+
+Windows PowerShell 启动示例（仅在当前终端进程中生效，不要把密钥写入 Git）：
+
+```powershell
+$env:AI_API_URL = 'https://api.example.com/v1/chat/completions'
+$env:AI_API_KEY = '你的服务商密钥'
+$env:AI_MODEL = '服务商提供的模型名称'
+$env:DB_USERNAME = 'root'
+$env:DB_PASSWORD = '你的 MySQL 密码'
+mvn spring-boot:run
+```
+
+也可在 IntelliJ 的 Spring Boot Run Configuration → Environment variables 中设置 `AI_API_URL`、`AI_API_KEY`、`AI_MODEL`。项目已提供 `.env.example` 作为变量名称参考；Spring Boot 不会自动读取 `.env` 文件，需在终端、IDE 启动配置或部署平台中注入环境变量。服务商地址须包含完整的 `/v1/chat/completions` 路径，模型名必须是该服务商支持的名称。AI 密钥只放后端环境变量，不要提交密钥或配置文件到仓库。
+
 ## 账号与共享清单
 
 - `POST /api/v1/auth/register`、`POST /api/v1/auth/login`、`GET /api/v1/auth/me`、`POST /api/v1/auth/logout` 使用服务端会话 Cookie。
