@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,8 @@ import org.springframework.http.HttpStatus;
 
 @Service
 public class AiService {
+    private static final Logger log = LoggerFactory.getLogger(AiService.class);
+
     private final RestClient client;
     private final ObjectMapper mapper;
     private final String endpoint;
@@ -30,12 +34,17 @@ public class AiService {
         this.endpoint = endpoint;
         this.apiKey = apiKey;
         this.model = model;
+        log.info("AI 配置：endpoint={}，model={}，apiKey={}", endpoint, model,
+                apiKey.isBlank() ? "未配置" : "已配置(长度 " + apiKey.length() + ")");
     }
 
     public JsonNode chat(List<Map<String, String>> messages, List<Map<String, Object>> foods) {
         String today = java.time.LocalDate.now().toString();
+        String foodsJson;
+        try { foodsJson = mapper.writeValueAsString(foods == null ? List.of() : foods); }
+        catch (Exception ex) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "清单数据格式无效"); }
         String system = "你是鲜期管家的家庭饮食助手。今天日期是 " + today
-                + "。根据清单回答临期优先顺序和菜谱。过期食品标记为已过期且不建议食用，不得推荐为可食用食材。不要臆造保质期、食材或过敏信息。清单数据(JSON)：" + foods;
+                + "。根据清单回答临期优先顺序和菜谱。过期食品标记为已过期且不建议食用，不得推荐为可食用食材。不要臆造保质期、食材或过敏信息。清单数据(JSON)：" + foodsJson;
         List<Map<String, String>> prompt = new ArrayList<>();
         prompt.add(Map.of("role", "system", "content", system));
         prompt.addAll(messages);
@@ -62,8 +71,13 @@ public class AiService {
             if (!apiKey.isBlank()) request.header(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey);
             return request.body(body).retrieve().body(JsonNode.class);
         } catch (RestClientResponseException ex) {
+            String respBody = ex.getResponseBodyAsString();
+            if (respBody.length() > 500) respBody = respBody.substring(0, 500) + "...";
+            log.warn("AI 上游返回 HTTP {}，endpoint={}，model={}，响应={}",
+                    ex.getStatusCode().value(), endpoint, model, respBody);
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "AI 服务请求失败（HTTP " + ex.getStatusCode().value() + ")");
         } catch (Exception ex) {
+            log.error("无法连接 AI 服务，endpoint={}，model={}，原因={}", endpoint, model, ex.toString());
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "无法连接 AI 服务，请检查后端配置和网络");
         }
     }

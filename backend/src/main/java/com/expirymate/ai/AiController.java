@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Pattern;
 import java.util.List;
 import java.util.Map;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -29,6 +30,7 @@ public class AiController {
 
     public record ChatRequest(@NotEmpty @Size(max = 30) List<@Valid Message> messages,
                               @Size(max = 300) List<Map<String, Object>> foods) {}
-    public record Message(@NotBlank @Size(max = 20) String role, @NotBlank @Size(max = 4000) String content) {}
+    public record Message(@NotBlank @Pattern(regexp = "user|assistant") String role,
+                          @NotBlank @Size(max = 4000) String content) {}
     public record RecognizeRequest(@NotBlank @Size(max = 16_800_000) String imageDataUrl) {}
 }
