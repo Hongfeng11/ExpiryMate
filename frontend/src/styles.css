@@ -82,7 +82,11 @@
 .recognition-heading strong{color:#3d5545;font-size:12px}
 .recognition-heading small{margin-top:4px;color:#8b998f;font-size:10px}
 .recognition-config-toggle,.recognition-save{padding:7px 10px;border:1px solid #e1e9e2;border-radius:8px;background:#fff;color:#548464;font-size:10px;white-space:nowrap}
-.recognition-actions{display:flex;align-items:center;gap:10px;margin-top:11px}
+.recognition-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:11px}
+.voice-button.listening{border-color:#f0c9c3;background:#fff0ee;color:#b85f59}
+.voice-hint,.voice-status,.voice-transcript{margin:9px 0 0;color:#87938a;font-size:10px;line-height:1.6}
+.voice-status{color:#528565}
+.voice-transcript{padding:8px 10px;border-radius:8px;background:#fff;color:#667468;overflow-wrap:anywhere}
 .photo-input-hidden{display:none}
 .photo-button{height:34px;padding:0 11px;font-size:11px}
 .photo-button>span{font-size:15px}

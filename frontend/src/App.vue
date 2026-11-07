@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { createItem, isApiMode, listItems, removeItem, setActiveListId, updateItem } from './services/items'
 import { getReminderSettings, saveReminderSettings } from './services/reminders'
 import { currentUser, signOut } from './services/auth'
@@ -36,6 +36,10 @@ const recognitionError = ref('')
 const recognitionMessage = ref('')
 const recognitionImage = ref('')
 const photoInput = ref(null)
+const voiceListening = ref(false)
+const voiceTranscript = ref('')
+const voiceStatus = ref('')
+let activeSpeechRecognition = null
 const showAssistant = ref(false)
 const assistantMessages = ref([])
 const assistantInput = ref('')
@@ -54,6 +58,7 @@ const expiryPreview = computed(() => {
   if (openedDate && openedDate < baseDate) return { date: openedDate, source: 'opened' }
   return { date: baseDate, source: baseDate === form.value.packageExpiresOn ? 'package' : 'calculated' }
 })
+onUnmounted(stopVoiceEntry)
 
 function emptyForm() {
   return { name: '', category: '食品', location: '', quantity: 1, unit: '件', manufacturedOn: '', purchasedOn: '', shelfLifeValue: '', shelfLifeUnit: '天', packageExpiresOn: '', openedOn: '', openedShelfLifeValue: '', openedShelfLifeUnit: '天', notes: '' }
@@ -200,7 +205,7 @@ async function persistReminderSettings() {
   } catch (error) { reminderError.value = error.message || '保存提醒设置失败' }
   finally { reminderSaving.value = false }
 }
-function openAdd() { editingId.value = null; form.value = emptyForm(); errorMessage.value = ''; recognitionError.value = ''; recognitionMessage.value = ''; recognitionImage.value = ''; showModal.value = true }
+function openAdd() { editingId.value = null; form.value = emptyForm(); errorMessage.value = ''; recognitionError.value = ''; recognitionMessage.value = ''; recognitionImage.value = ''; voiceTranscript.value = ''; voiceStatus.value = ''; showModal.value = true }
 function openFoodAssistant(prompt = '') {
   showAssistant.value = true
   assistantError.value = ''
@@ -259,6 +264,86 @@ function calculatedOpenedExpiry() {
 function calculatedExpiry() {
   return [calculatedBaseExpiry(), calculatedOpenedExpiry()].filter(Boolean).sort()[0] || ''
 }
+function spokenDate(text) {
+  const value = String(text || '').trim()
+  let match = value.match(/(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日?/)
+  if (!match) match = value.match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/)
+  if (!match) return ''
+  const [, year, month, day] = match
+  const date = new Date(Number(year), Number(month) - 1, Number(day))
+  return date.getFullYear() === Number(year) && date.getMonth() === Number(month) - 1 && date.getDate() === Number(day)
+    ? `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}` : ''
+}
+function labeledValue(text, labels) {
+  const expression = new RegExp(`(?:${labels})\\s*[：:]?\\s*([^，,。；;]+)`)
+  return text.match(expression)?.[1]?.trim() || ''
+}
+function applyVoiceTranscript(rawText) {
+  const text = String(rawText || '').replace(/\s+/g, ' ').trim()
+  voiceTranscript.value = text
+  let filled = 0
+  const name = labeledValue(text, '商品名称|物品名称|商品名|物品名|名称')
+  if (name) { form.value.name = name.slice(0, 120); filled++ }
+  const category = labeledValue(text, '分类|类别')
+  if (['食品', '个护', '保健品', '清洁', '其他'].includes(category)) { form.value.category = category; filled++ }
+  const dateFields = [
+    ['manufacturedOn', '生产日期|生产时间'],
+    ['purchasedOn', '购买日期|购入日期'],
+    ['packageExpiresOn', '包装到期日|到期日期|到期日|有效期至'],
+    ['openedOn', '开封日期|开封时间'],
+  ]
+  for (const [field, labels] of dateFields) {
+    const value = spokenDate(labeledValue(text, labels))
+    if (value) { form.value[field] = value; filled++ }
+  }
+  const shelfLife = text.match(/(?:保质期)\s*[：:]?\s*(\d+)\s*(天|日|个月|月|年)/)
+  if (shelfLife) {
+    form.value.shelfLifeValue = shelfLife[1]
+    form.value.shelfLifeUnit = shelfLife[2] === '日' ? '天' : shelfLife[2] === '个月' ? '月' : shelfLife[2]
+    filled++
+  }
+  const openedLife = text.match(/(?:开封后期限|开封后)\s*[：:]?\s*(\d+)\s*(天|日|个月|月|年)/)
+  if (openedLife) {
+    form.value.openedShelfLifeValue = openedLife[1]
+    form.value.openedShelfLifeUnit = openedLife[2] === '日' ? '天' : openedLife[2] === '个月' ? '月' : openedLife[2]
+    filled++
+  }
+  const quantity = text.match(/(?:数量)\s*[：:]?\s*(\d+(?:\.\d+)?)\s*(件|瓶|盒|袋|个|支|包|罐|桶|克|千克|毫升|升)?/)
+  if (quantity) {
+    form.value.quantity = Number(quantity[1])
+    if (quantity[2]) form.value.unit = quantity[2]
+    filled++
+  }
+  const location = labeledValue(text, '存放位置|位置|存放')
+  if (location) { form.value.location = location.slice(0, 120); filled++ }
+  voiceStatus.value = filled ? `语音识别完成，已填入 ${filled} 项，请核对后保存。` : '已识别语音，请按录入格式补充字段标签，例如“名称：牛奶，数量：2盒”。'
+}
+function startVoiceEntry() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+  if (!SpeechRecognition) { voiceStatus.value = '当前浏览器不支持语音识别，请使用最新版 Chrome 或 Edge。'; return }
+  if (voiceListening.value) { activeSpeechRecognition?.stop(); return }
+  voiceStatus.value = '请清晰说出商品信息…'
+  voiceTranscript.value = ''
+  const recognition = new SpeechRecognition()
+  activeSpeechRecognition = recognition
+  recognition.lang = 'zh-CN'
+  recognition.continuous = false
+  recognition.interimResults = false
+  recognition.maxAlternatives = 1
+  recognition.onstart = () => { voiceListening.value = true }
+  recognition.onresult = event => applyVoiceTranscript(event.results?.[0]?.[0]?.transcript || '')
+  recognition.onerror = event => {
+    const messages = { 'not-allowed': '麦克风权限被拒绝，请在浏览器设置中允许使用麦克风。', 'no-speech': '没有听到语音，请再试一次。', 'network': '语音识别服务连接失败，请检查网络。' }
+    voiceStatus.value = messages[event.error] || `语音识别失败（${event.error || '未知错误'}）`
+  }
+  recognition.onend = () => { voiceListening.value = false; if (activeSpeechRecognition === recognition) activeSpeechRecognition = null }
+  try { recognition.start() } catch { voiceListening.value = false; voiceStatus.value = '无法启动麦克风，请稍后重试。' }
+}
+function stopVoiceEntry() {
+  activeSpeechRecognition?.abort()
+  activeSpeechRecognition = null
+  voiceListening.value = false
+}
 async function saveItem() {
   errorMessage.value = ''
   if (!form.value.name.trim()) { errorMessage.value = '请填写物品名称'; return }
@@ -271,6 +356,7 @@ async function saveItem() {
     const payload = { ...form.value, name: form.value.name.trim(), expiresOn, quantity: Number(form.value.quantity) || 1, emoji: emojiFor(form.value.category), color: colorFor(form.value.category), status: 'active' }
     if (editingId.value) await updateItem(editingId.value, payload)
     else await createItem(payload)
+    stopVoiceEntry()
     showModal.value = false
     await refresh({ reloadCatalog: true })
   } catch (error) { errorMessage.value = error.message || '保存失败，请稍后重试' }
@@ -549,13 +635,16 @@ onMounted(async () => {
       </section>
     </main>
 
-    <div v-if="showModal" class="modal-backdrop" @click.self="showModal=false">
+    <div v-if="showModal" class="modal-backdrop" @click.self="showModal=false; stopVoiceEntry()">
       <section class="item-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-        <header class="modal-header"><div><span class="modal-kicker">{{ editingId ? '更新物品信息' : '记录新物品' }}</span><h2 id="modal-title">{{ editingId ? '编辑物品' : '添加到你的物品清单' }}</h2><p>包装上的信息可以稍后补充。</p></div><button class="modal-close" aria-label="关闭" @click="showModal=false">×</button></header>
+        <header class="modal-header"><div><span class="modal-kicker">{{ editingId ? '更新物品信息' : '记录新物品' }}</span><h2 id="modal-title">{{ editingId ? '编辑物品' : '添加到你的物品清单' }}</h2><p>包装上的信息可以稍后补充。</p></div><button class="modal-close" aria-label="关闭" @click="showModal=false; stopVoiceEntry()">×</button></header>
         <form @submit.prevent="saveItem">
           <section class="recognition-box">
             <div class="recognition-heading"><div><strong>拍照识别商品信息</strong><small>拍摄包装，自动填写名称和日期，识别后请核对</small></div></div>
-            <div class="recognition-actions"><input ref="photoInput" class="photo-input-hidden" type="file" accept="image/*" capture="environment" @change="onProductPhoto" /><button type="button" class="secondary-button photo-button" :disabled="recognizingProduct" @click="photoInput?.click()"><span>▧</span>{{ recognizingProduct ? '正在识别…' : '拍照 / 选择照片' }}</button></div>
+            <div class="recognition-actions"><input ref="photoInput" class="photo-input-hidden" type="file" accept="image/*" capture="environment" @change="onProductPhoto" /><button type="button" class="secondary-button photo-button" :disabled="recognizingProduct" @click="photoInput?.click()"><span>▧</span>{{ recognizingProduct ? '正在识别…' : '拍照 / 选择照片' }}</button><button type="button" class="secondary-button voice-button" :class="{ listening: voiceListening }" @click="startVoiceEntry"><span>{{ voiceListening ? '■' : '🎙' }}</span>{{ voiceListening ? '停止录音' : '语音录入' }}</button></div>
+            <p class="voice-hint">说出带标签的信息，例如：名称牛奶，生产日期 2026 年 11 月 1 日，保质期 1 个月，数量 2 盒。</p>
+            <p v-if="voiceStatus" class="voice-status" aria-live="polite">{{ voiceStatus }}</p>
+            <p v-if="voiceTranscript" class="voice-transcript">识别内容：{{ voiceTranscript }}</p>
             <img v-if="recognitionImage" class="recognition-preview" :src="recognitionImage" alt="待识别的商品照片" />
             <p v-if="recognitionError" class="form-error recognition-status">{{ recognitionError }}</p>
             <p v-if="recognitionMessage" class="recognition-success">{{ recognitionMessage }}</p>
